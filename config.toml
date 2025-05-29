@@ -1,3 +1,7 @@
+[account]
 email='test@example.com'
-agent_token=''
+token=''
 proxy=''
+
+[agent.booty]
+token=''
