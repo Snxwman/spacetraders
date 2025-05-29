@@ -1,5 +1,4 @@
-from typing import Any, Callable, Optional
-from spacetraders.config import CONFIG
+from typing import Any, Callable
 from spacetraders.api.agent import Agent, RegisterAgentData
 from spacetraders.api.api import SpaceTradersAPI
 from spacetraders.defaults import Defaults

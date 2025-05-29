@@ -45,9 +45,6 @@ class Agent:
         self.ships: list[Ship] = self.my_ships()
         self.contracts: list[Contract] = self.my_contracts()
 
-        print()
-        print(self.__dict__)
-
 
     def save_to_file(self):
         ...
