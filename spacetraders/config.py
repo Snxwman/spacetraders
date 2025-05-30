@@ -11,6 +11,7 @@ class Config:
         self.email: str = str(raw_config['email'])
 
         self.accountID: str = str(raw_config['accountID'])
+        self.agentID: str = str(raw_config['agentID'])
 
     def _from_file(self):
         with open(self._config_path) as config_file:

@@ -8,6 +8,8 @@ from spacetraders.api.ship import Ship
 from spacetraders.api.contract import Contract
 from spacetraders.api.apierror import SpaceTradersAPIError
 
+from spacetraders.api.response import ShipCooldownShape
+
 DEFAULT_FACTION = 'COSMIC'
 active_agent: Optional[Agent] = None
 
@@ -256,14 +258,22 @@ def ships(active_agent: Agent):
             print(delivery)
         except ValueError as e:
             print(f'Error delivering cargo: {e}')
+
+    def sellCargo(shipSymbol: str, tradeSymbol: str, units):
+        print(f'Selling {units} units of {tradeSymbol} for ship {shipSymbol}...')
+        try:
+            Ship.sell_cargo(shipSymbol, tradeSymbol, units)
+            print(f'Sold {units} units of {tradeSymbol} for ship {shipSymbol}.')
+        except ValueError as e:
+            print(f'Error selling cargo: {e}')
     
     def getCooldown(shipSymbol: str):
         print(f'Getting cooldowns for ship {shipSymbol}...')
         try:
-            cooldown = Ship.get_cooldown(shipSymbol)
+            cooldown: ShipCooldownShape = Ship.get_cooldown(shipSymbol)
             print(f'Cooldowns for ship {shipSymbol}:')
-            print(f'Total Cooldown: {cooldown["totalSeconds"]} seconds')
-            print(f'Remaining: {cooldown["remainingSeconds"]} seconds')
+            print(f'Total Cooldown: {cooldown["total_seconds"]} seconds')
+            print(f'Remaining: {cooldown["remaining_seconds"]} seconds')
         except ValueError as e:
             print(f'No Cooldown found for ship {shipSymbol}.')
         
@@ -274,13 +284,13 @@ def ships(active_agent: Agent):
     current_ships = Agent.my_ships(active_agent)
 
     if not current_ships:
-        print(f'No ships found for agent {active_agent.callsign}.')
+        print(f'No ships found for agent {active_agent['symbol']}.')
         return
 
-    print(f'Ships for {active_agent.callsign}:')
+    print(f'Ships for {active_agent['symbol']}:')
     for x in range(len(current_ships)):
         ship = current_ships[x]
-        print(f'#{x} + Ship Name: {ship['symbol']}\tLocation: {ship['nav']['waypointSymbol']}')
+        print(f'#{x} + Ship Name: {ship['symbol']}\tLocation: {ship['nav']['waypointSymbol']}\tStatus: {ship['nav']['status']}\tCargo: {ship['cargo']['units']}/{ship['cargo']['capacity']} units')
     
     # choose ship to do something with
     print('Select a ship by entering its index (0-based):')
@@ -289,62 +299,85 @@ def ships(active_agent: Agent):
         ship_index = ship_chosen
         if ship_index < 0 or ship_index >= len(current_ships):
             raise IndexError
-        chosen_ship = current_ships[ship_index]
+        chosen_ship: Ship = current_ships[ship_index]
        
     except (IndexError, ValueError):
         print(f'Invalid ship index: {ship_chosen}. Please enter a valid index.')
         return
     
+    def functions_on_orbit(shipSymbol: str):
+        print('3. Dock Ship')
+        print('4. Scan waypoints')
+        print('5. Navigate to a waypoint')
+        print('6. Extract Resources')
+        print('7. View Cargo')
+
+        action = input('Enter action number (1-9): ')
+        match action:
+            case '1':
+                getNavStatus(shipSymbol)
+            case '2':
+                getCooldown(shipSymbol)
+            case '3':
+                dockShip(shipSymbol)
+            case '4':
+                print('Available waypoints:')
+                scanWaypoints(shipSymbol)
+            case '5':
+                waypoint_symbol = input('Enter waypoint symbol to navigate to: ')
+                navigate(shipSymbol, waypoint_symbol.upper())
+                if not waypoint_symbol:
+                    print('No waypoint symbol provided. Aborting navigation.')
+                    return
+            case '6':
+                extract_resources(shipSymbol)
+            case '7':
+                viewCargo(shipSymbol)
+                
+        
+    def functions_while_docked(shipSymbol: str):
+        print('3. Orbit Ship')
+        print('4. Purchase Cargo')
+        print('5. Sell Cargo')
+        print('6. Deliver Cargo')
+        print('7. View Cargo')
+
+        action = input('Enter action number (1-9): ')
+        match action:
+            case '1':
+                getNavStatus(shipSymbol)
+            case '2':
+                getCooldown(shipSymbol)
+            case '3':
+                orbitShip(shipSymbol)
+            case '4':
+                cargo_symbol = input('Enter cargo symbol to purchase: ')
+                units = input('Enter number of units to purchase: ')
+                purchaseCargo(shipSymbol, cargo_symbol, units)
+            case '5':
+                cargo_symbol = input('Enter cargo symbol to sell: ')
+                units = input('Enter number of units to sell: ')
+                sellCargo(shipSymbol, cargo_symbol, units)
+            case '6':
+                deliverCargo(shipSymbol)
+            case '7':
+                viewCargo(shipSymbol)
+
+
+    nav_status = chosen_ship['nav']['status']
     print(f'You selected ship: {chosen_ship["symbol"]} at {chosen_ship["nav"]["waypointSymbol"]}')
     print("What would you like to do with this ship?")
-    print('1. Scan waypoints')
-    print('2. Navigate to a waypoint')
-    print('3. Orbit Ship')
-    print('4. Dock Ship')
-    print('5. Get Status of Ship')
-    print('6. Purchase Cargo')
-    print('7. Extract Resources')
-    print('8. View Cargo')
-    print('9. Deliver Cargo')
-    print('10. Get Cooldown')
-
-
-    action = input('Enter action number (1-9): ')
-    match action:
-        case '1':
-            print('Available waypoints:')
-            scanWaypoints(chosen_ship['symbol'])
-        case '2':
-            waypoint_symbol = input('Enter waypoint symbol to navigate to: ')
-            navigate(chosen_ship['symbol'], waypoint_symbol.upper())
-            if not waypoint_symbol:
-                print('No waypoint symbol provided. Aborting navigation.')
-                return
-        case '3':
-            orbitShip(chosen_ship['symbol'])
-        case '4':
-            dockShip(chosen_ship['symbol'])
-        case '5':
-            getNavStatus(chosen_ship['symbol'])
-        case '6':
-            cargo_symbol = input('Enter cargo symbol to purchase: ')
-            units = input('Enter number of units to purchase: ')
-            purchaseCargo(chosen_ship['symbol'], cargo_symbol, units)
-        case '7':
-            extract_resources(chosen_ship['symbol'])
-        case '8':
-            viewCargo(chosen_ship['symbol'])
-        case '9':
-            deliverCargo(chosen_ship['symbol'])
-        case '10':
-            getCooldown(chosen_ship['symbol'])
-
-
+    print('1. Get Status of Ship')
+    print('2. Get Cooldown of Ship')
+    if nav_status == 'DOCKED':
+        functions_while_docked(chosen_ship['symbol'])
+    elif nav_status == 'IN_ORBIT':
+        functions_on_orbit(chosen_ship['symbol'])
 
 def run(client: SpaceTradersAPI):
     quit = False
     active_agent = Agent.get_agent('AGENT_MOJO')
-    print(f'Active agent: {active_agent.callsign} ({active_agent.starting_faction})')
+    print(f'Active agent: {active_agent['symbol']} ({active_agent['symbol']})')
     while not quit:
         args = list(filter(len, get_next_command()))
 

@@ -101,7 +101,8 @@ class Agent:
 
         agent = res.spacetraders['data']
         return { 
-            'account_id': agent['accountId'],
+            # TODO: fix this, it shouldn't be in the config like this
+            'account_id': CONFIG.agentID, # agent['accountId'],
             'symbol': agent['symbol'],
             'headquarters': agent['headquarters'],
             'credits': agent['credits'],

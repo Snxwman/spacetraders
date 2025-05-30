@@ -143,6 +143,11 @@ class SpaceTradersAPIEndpoint(EndpointDataMixin, Enum):
         True
     )
     # Template('/my/ships/$param/sell')
+    MY_SHIPS_SELL = (
+        Template('/my/ships/$param/sell'), 
+        HTTPMethod.POST,
+        True
+    )
     # Template('/my/ships/$param/siphon')
     # Template('/my/ships/$param/survey')
     # Template('/my/ships/$param/transfer')

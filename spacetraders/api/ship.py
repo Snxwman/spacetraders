@@ -5,121 +5,7 @@ from enum import Enum, auto
 from spacetraders.api.faction import Faction
 from spacetraders.api.api import SpaceTradersAPIRequest, SpaceTradersAPIEndpoint, SpaceTradersAPIResponse, SpaceTradersAPIError
 
-
-class ShipRole(Enum):
-    REFINERY = auto()
-
-@dataclass
-class Requirements:
-    power: int
-    crew: int
-    slots: int
-
-
-@dataclass
-class ShipInventory:
-    symbol: str
-    name: str
-    description: str
-    units: int
-
-
-@dataclass
-class ShipRegistration:
-    name: str
-    faction: Faction
-    role: ShipRole
-
-
-# TODO: Consider interaction with other areas of navigation
-@dataclass
-class Nav:
-    system: str
-
-
-@dataclass
-class ShipCrew:
-    current: int
-    required: int
-    capacity: int
-    rotation: int
-    morale: int
-    wages: int
-
-
-@dataclass
-class ShipFrame:
-    symbol: str
-    name: str
-    description: str
-    module_slots: int
-    mounting_points: int
-    fuel_capacity: int
-    requirements: Requirements
-    condition: int
-
-
-@dataclass
-class ShipReactor:
-    symbol: str
-    name: str
-    description: str
-    power_output: str
-    requirements: Requirements
-    condition: str
-
-
-@dataclass
-class ShipEngine:
-    symbol: str
-    name: str
-    description: str
-    speed: int
-    requirements: Requirements
-    condition: int
-
-
-@dataclass
-class ShipModule:
-    symbol: str
-    name: str
-    description: str
-    requirements: Requirements
-    capacity: int
-    range: int
-
-
-@dataclass
-class ShipMounts:
-    symbol: str
-    name: str
-    description: str
-    requirements: Requirements
-    strength: int
-    deposit: list[str]
-
-
-@dataclass
-class ShipCargo:
-    capacity: int
-    units: int
-    inventory: list[ShipInventory]
-
-
-@dataclass
-class ShipFuel:
-    current: int
-    capacity: int
-    consumed_amount: int
-    consumed_timestamp: datetime
-
-
-@dataclass
-class ShipCooldown:
-    symbol: str
-    total_seconds: int
-    remaining_seconds: int
-    expiration: datetime
+from spacetraders.api.response import ShipCooldownShape
 
 
 class Ship:
@@ -261,6 +147,24 @@ class Ship:
                 raise ValueError
 
         return data if data is not None else []
+    
+    @staticmethod
+    def sell_cargo(shipSymbol: str, cargoSymbol: str, units):
+        res = SpaceTradersAPIRequest() \
+            .endpoint(SpaceTradersAPIEndpoint.MY_SHIPS_SELL) \
+            .params(list([shipSymbol])) \
+            .data({"symbol": cargoSymbol,
+                   "units": units }) \
+            .call()
+
+        data = res.spacetraders['data']
+        match res:
+            case SpaceTradersAPIResponse():
+                data = res.spacetraders['data']
+            case SpaceTradersAPIError():
+                raise ValueError
+
+        return data if data is not None else []
 
     @staticmethod
     def extract(shipSymbol: str):
@@ -283,7 +187,7 @@ class Ship:
         return data if data is not None else []
 
     @staticmethod
-    def get_cooldown(shipSymbol: str):
+    def get_cooldown(shipSymbol: str) -> ShipCooldownShape:
         res = SpaceTradersAPIRequest() \
             .endpoint(SpaceTradersAPIEndpoint.MY_SHIPS_COOLDOWN) \
             .params(list([shipSymbol])) \
@@ -291,14 +195,25 @@ class Ship:
 
         # status 200 if successfully fetched cooldowns, 204 if no cooldown
         # its going to return no content body if no cooldown
-        
         match res:
             case SpaceTradersAPIResponse():
                 data = res.spacetraders['data']
             case SpaceTradersAPIError():
                 raise ValueError
+            
+        shape: ShipCooldownShape = {
+            'ship_symbol': data['shipSymbol'],
+            'total_seconds': data['totalSeconds'],
+            'remaining_seconds': data['remainingSeconds'],
+            'expiration': datetime.fromisoformat(data['expiration']) if data['expiration'] is not None else None
+        }
 
-        return data if data is not None else []
+        return shape if shape is not None else ShipCooldownShape(
+            ship_symbol=shipSymbol,
+            total_seconds=0,
+            remaining_seconds=0,
+            expiration=None
+        )
     
     @staticmethod
     def get_cargo(shipSymbol: str):

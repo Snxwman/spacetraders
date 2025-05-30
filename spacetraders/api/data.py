@@ -7,6 +7,6 @@ class EndpointData(TypedDict):
     ...
 
 
-class RegisterAgentData(EndpointData, closed=True):
+class RegisterAgentData(EndpointData):
     symbol: str
     faction: FactionSymbol
