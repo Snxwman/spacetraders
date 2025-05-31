@@ -2,29 +2,31 @@ from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum, auto
 
-from spacetraders.api.faction import Faction
 from spacetraders.api.api import SpaceTradersAPIRequest, SpaceTradersAPIEndpoint, SpaceTradersAPIResponse, SpaceTradersAPIError
 
-from spacetraders.api.response import ShipCooldownShape
+from spacetraders.api.response import ShipCooldownShape, ShipCargoShape, ShipCargoInventoryShape
+from spacetraders.api.response import ShipExtractResourceShape, ShipExtractionShape, ShipExtractShape
 
+from spacetraders.api.response import ShipShape, ShipRegistrationShape, ShipNavShape, ShipCrewShape, ShipFrameShape, ShipReactorShape, ShipEngineShape, ShipModulesShape, ShipMountsShape, ShipCargoShape, ShipFuelShape, ShipCooldownShape, ShipCargoInventoryShape, WaypointShape, WaypointChartShape
+from spacetraders.api.response import WaypointType, FactionSymbol
 
 class Ship:
 
     def __init__(self):
-        self.registration: ShipRegistration
-        # self.nav
-        self.crew: ShipCrew
-        self.frame: ShipFrame
-        self.reactor: ShipReactor
-        self.engine: ShipEngine
-        self.modules: ShipModule
-        self.mounts: ShipMounts
-        self.cargo: ShipCargo
-        self.fuel: ShipFuel
-        self.cooldown: ShipCooldown
+        self.registration: ShipRegistrationShape
+        self.nav: ShipNavShape
+        self.crew: ShipCrewShape
+        self.frame: ShipFrameShape
+        self.reactor: ShipReactorShape
+        self.engine: ShipEngineShape
+        self.modules: ShipModulesShape
+        self.mounts: ShipMountsShape
+        self.cargo: ShipCargoShape
+        self.fuel: ShipFuelShape
+        self.cooldown: ShipCooldownShape
 
     @staticmethod
-    def scan_waypoints(shipSymbol: str) -> list[str]:
+    def scan_waypoints(shipSymbol: str) -> list[WaypointShape]:
         res = SpaceTradersAPIRequest() \
             .endpoint(SpaceTradersAPIEndpoint.MY_SHIPS_SCAN_WAYPOINTS) \
             .params(list([shipSymbol])) \
@@ -35,13 +37,40 @@ class Ship:
         match res:
             case SpaceTradersAPIResponse():
                 data = res.spacetraders['data']
-                if res.spacetraders['error'] is not None:
-                    print(f'{shipSymbol} had an error while scanning waypoints.')
-                    print(f'Code: {res.spacetraders['error']['code']}, Message: {res.spacetraders['error']['message']}')
-                    return []
+                # if res.spacetraders['error'] is not None:
+                #     print(f'{shipSymbol} had an error while scanning waypoints.')
+                #     print(f'Code: {res.spacetraders['error']['code']}, Message: {res.spacetraders['error']['message']}')
+                #     return []
             case SpaceTradersAPIError():
                 raise ValueError
-        return data if data is not None else []
+            
+        waypointShapes: list[WaypointShape] = []
+        for waypoint in data['waypoints']:
+            chart: WaypointChartShape = {
+                'waypointSymbol': waypoint['chart']['waypointSymbol'],
+                'submittedBy': waypoint['chart']['submittedBy'],
+                'submittedOn': datetime.fromisoformat(waypoint['chart']['submittedOn'])
+            }
+            orbitals: list[str] = []
+            for orbital in waypoint['orbitals']:
+                orbitals.append(orbital['symbol'])
+            traits = []
+            if 'traits' in waypoint and waypoint['traits'] is not None:
+                for trait in waypoint['traits']:
+                    traits.append(trait['symbol'])
+            waypointShapes.append(WaypointShape(
+                symbol=waypoint['symbol'],
+                type=WaypointType[waypoint['type']],
+                system_symbol=waypoint['systemSymbol'],
+                x=int(waypoint['x']),
+                y=int(waypoint['y']),
+                orbitals=orbitals,
+                faction=FactionSymbol[waypoint['faction']['symbol']],
+                traits=traits,
+                chart=chart
+            ))
+
+        return waypointShapes if waypointShapes is not None else []
     
     @staticmethod
     def get_nav_status(shipSymbol: str):
@@ -165,14 +194,50 @@ class Ship:
                 raise ValueError
 
         return data if data is not None else []
+    
+    @staticmethod
+    def jettison_cargo(shipSymbol: str, cargoSymbol: str, units: int) -> ShipCargoShape:
+        res = SpaceTradersAPIRequest() \
+            .endpoint(SpaceTradersAPIEndpoint.MY_SHIPS_JETTISON) \
+            .params(list([shipSymbol])) \
+            .data({"symbol": cargoSymbol,
+                   "units": units}) \
+            .call()
+
+        data = res.spacetraders['data']
+        match res:
+            case SpaceTradersAPIResponse():
+                data = res.spacetraders['data']
+            case SpaceTradersAPIError():
+                raise ValueError
+        # Returns ShipCargoShape
+
+        inventory: list[ShipCargoInventoryShape] = []
+        if 'inventory' in data and data['inventory'] is not None:
+            inv = data['inventory']
+            for item in inv:
+                inventory.append(ShipCargoInventoryShape(
+                    symbol=item['symbol'],
+                    name=item['name'],
+                    description=item['description'],
+                    units=item['units']
+                ))
+
+        shape: ShipCargoShape = {
+            'capacity': data['capacity'],
+            'units': data['units'],
+            'inventory': inventory
+        }
+        return shape
 
     @staticmethod
-    def extract(shipSymbol: str):
+    def extract(shipSymbol: str) -> ShipExtractShape:
         res = SpaceTradersAPIRequest() \
             .endpoint(SpaceTradersAPIEndpoint.MY_SHIPS_EXTRACT) \
             .params(list([shipSymbol])) \
             .call()
 
+        # status 409 if ship is in cooldown, 201 if worked
         data = res.spacetraders['data']
         match res:
             case SpaceTradersAPIResponse():
@@ -183,8 +248,48 @@ class Ship:
                 #     # print(f'Code: {res.spacetraders["error"]["code"]}, Message: {res.spacetraders["error"]["message"]}')
             case SpaceTradersAPIError():
                 raise ValueError
+        if data is None:
+            print(f'{shipSymbol} had an error while extracting.')
+            error = res.spacetraders['error']
+            print(f'Code: {error["code"]}, Message: {error["message"]}')
+            raise ValueError(f'Extraction failed for {shipSymbol} with error code {error["code"]} and message: {error["message"]}')
+        
+        resource: ShipExtractResourceShape = {
+            'symbol': data['extraction']['yield']['symbol'],
+            'units': data['extraction']['yield']['units']
+        }
+        extraction: ShipExtractionShape = {
+            'symbol': data['extraction']['shipSymbol'],
+            'yield': resource
+        }
+        cooldown: ShipCooldownShape = {
+            'ship_symbol': data['cooldown']['shipSymbol'],
+            'total_seconds': data['cooldown']['totalSeconds'],
+            'remaining_seconds': data['cooldown']['remainingSeconds'],
+            'expiration': datetime.fromisoformat(data['cooldown']['expiration']) if data['cooldown']['expiration'] is not None else None
+        }
+        inventory: list[ShipCargoInventoryShape] = []
+        if 'inventory' in data and data['inventory'] is not None:
+            inv = data['inventory']
+            for item in inv:
+                inventory.append(ShipCargoInventoryShape(
+                    symbol=item['symbol'],
+                    name=item['name'],
+                    description=item['description'],
+                    units=item['units']
+                ))
+        cargo: ShipCargoShape = {
+            'capacity': data['capacity'],
+            'units': data['units'],
+            'inventory': inventory
+        }
+        shape: ShipExtractShape = {
+            'extraction': extraction,
+            'cooldown': cooldown,
+            'cargo': cargo
 
-        return data if data is not None else []
+        }
+        return shape
 
     @staticmethod
     def get_cooldown(shipSymbol: str) -> ShipCooldownShape:
@@ -216,7 +321,7 @@ class Ship:
         )
     
     @staticmethod
-    def get_cargo(shipSymbol: str):
+    def get_cargo(shipSymbol: str) -> ShipCargoShape:
         res = SpaceTradersAPIRequest() \
             .endpoint(SpaceTradersAPIEndpoint.MY_SHIPS_CARGO) \
             .params(list([shipSymbol])) \
@@ -228,7 +333,27 @@ class Ship:
                 data = res.spacetraders['data']
             case SpaceTradersAPIError():
                 raise ValueError
+        
+        inventory: list[ShipCargoInventoryShape] = []
+        if 'inventory' in data and data['inventory'] is not None:
+            inv = data['inventory']
+            for item in inv:
+                inventory.append(ShipCargoInventoryShape(
+                    symbol=item['symbol'],
+                    name=item['name'],
+                    description=item['description'],
+                    units=item['units']
+                ))
 
-        return data if data is not None else []
+        shape: ShipCargoShape = {
+            'capacity': data['capacity'],
+            'units': data['units'],
+            'inventory': inventory
+        }
+        return shape if shape is not None else ShipCargoShape(
+            capacity=0,
+            units=0,
+            inventory={}
+        )
     
 

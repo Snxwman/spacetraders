@@ -14,7 +14,8 @@ from spacetraders.api.enums import (
     ShipReactors,
     ShipRole,
     TradeSymbol,
-    WaypointType
+    WaypointType,
+    WaypointTraitSymbol,
 )
 
 class SpaceTradersAPIResponseShape(TypedDict):
@@ -91,14 +92,16 @@ class ShipNavRouteLocationShape(SpaceTradersAPIResponseShape):
 class ShipNavRouteShape(SpaceTradersAPIResponseShape):
     destination: ShipNavRouteLocationShape
     origin: ShipNavRouteLocationShape
+    departureTime: datetime
+    arrival: datetime
 
 
 class ShipNavShape(SpaceTradersAPIResponseShape):
     system_symbol: str
     waypoint_symbol: str
     route: ShipNavRouteShape
-    departure_time: datetime
-    arrival: datetime
+    status: str
+    flightMode: str
 
 
 class ShipCrewShape(SpaceTradersAPIResponseShape):
@@ -179,7 +182,7 @@ class ShipCargoInventoryShape(SpaceTradersAPIResponseShape):
 class ShipCargoShape(SpaceTradersAPIResponseShape):
     capacity: int
     units: int
-    inventory: ShipCargoInventoryShape
+    inventory: list[ShipCargoInventoryShape]
 
 
 class ShipFuelConsumedShape(SpaceTradersAPIResponseShape):
@@ -197,7 +200,7 @@ class ShipCooldownShape(SpaceTradersAPIResponseShape):
     ship_symbol: str
     total_seconds: int
     remaining_seconds: int
-    expiration: datetime
+    expiration: datetime | int
 
 
 class ShipShape(SpaceTradersAPIResponseShape):
@@ -208,9 +211,37 @@ class ShipShape(SpaceTradersAPIResponseShape):
     frame: ShipFrameShape
     reactor: ShipReactorShape
     engine: ShipEngineShape
-    modules: ShipModulesShape
-    mounts: ShipMountsShape
+    modules: list[ShipModulesShape]
+    mounts: list[ShipMountsShape]
     cargo: ShipCargoShape
     fuel: ShipFuelShape
     cooldown: ShipCooldownShape
 
+class ShipExtractResourceShape(SpaceTradersAPIResponseShape):
+    symbol: TradeSymbol
+    units: int
+
+class ShipExtractionShape(SpaceTradersAPIResponseShape):
+    symbol: str
+    result: ShipExtractResourceShape
+
+class ShipExtractShape(SpaceTradersAPIResponseShape):
+    extraction: ShipExtractionShape
+    cooldown: ShipCooldownShape
+    cargo: ShipCargoShape
+
+class WaypointChartShape(SpaceTradersAPIResponseShape):
+    waypointSymbol: str
+    submittedBy: str
+    submittedOn: datetime
+
+class WaypointShape(SpaceTradersAPIResponseShape):
+    symbol: str
+    type: WaypointType
+    system_symbol: str
+    x: int
+    y: int
+    orbitals: list[str]
+    faction: FactionSymbol
+    traits: list[WaypointTraitSymbol]
+    chart: WaypointChartShape

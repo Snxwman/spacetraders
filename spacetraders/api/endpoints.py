@@ -100,6 +100,11 @@ class SpaceTradersAPIEndpoint(EndpointDataMixin, Enum):
     )
     # Template('/my/ships/$param/extract/survey')
     # Template('/my/ships/$param/jettison')
+    MY_SHIPS_JETTISON = (
+        Template('/my/ships/$param/jettison'),
+        HTTPMethod.POST,
+        True
+    )
     # Template('/my/ships/$param/jump')
     # Template('/my/ships/$param/mounts')
     # Template('/my/ships/$param/mounts/install')

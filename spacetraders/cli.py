@@ -8,7 +8,8 @@ from spacetraders.api.ship import Ship
 from spacetraders.api.contract import Contract
 from spacetraders.api.apierror import SpaceTradersAPIError
 
-from spacetraders.api.response import ShipCooldownShape
+from spacetraders.api.response import ShipCooldownShape, ShipShape, AgentShape, WaypointShape
+from spacetraders.api.enums import FactionSymbol
 
 DEFAULT_FACTION = 'COSMIC'
 active_agent: Optional[Agent] = None
@@ -93,7 +94,7 @@ def make_new_agent(args: list[str]):
             case 'callsign':
                 agent_data['symbol'] = get_callsign()
             case 'faction':
-                agent_data['faction'] = get_faction()
+                agent_data['faction'] = FactionSymbol[get_faction()]
             # case 'email':
             #     agent_data['email'] = get_email()
 
@@ -105,7 +106,7 @@ def make_new_agent(args: list[str]):
 
     agent_data: RegisterAgentData = {
         'symbol': callsign,
-        'faction': faction,
+        'faction': FactionSymbol[faction],
         # 'email': email,
     } 
     
@@ -130,15 +131,16 @@ def accept_contract(active_agent):
         prompt = f'Enter Contract ID: '
         answer = get_prompt_answer(prompt=prompt, answer=arg, default=default)
         return answer
-    contracts = Contract.get_contracts(active_agent)
+    contracts = Contract.get_contracts()
     if not contracts:
         print('No contracts found.')
         return
 
     arg = ''
+    contract_chosen: int = 0
     try:
         print('Select a contract to accept by entering its index (0-based):')
-        contract_chosen = int(get_contract_id(arg=index_or_none(arg, 1)))
+        contract_chosen  = int(get_contract_id(arg=index_or_none(arg, 1)))
         contract_id = contracts[contract_chosen].id
     
     except (IndexError, ValueError):
@@ -153,11 +155,11 @@ def accept_contract(active_agent):
             print(f'Unexpected error: {e}')
             traceback.print_exc()
 
-def get_contracts(active_agent: Agent):
+def get_contracts(active_agent: AgentShape):
     print('Getting contracts for active agent...')
-    contracts = Contract.get_contracts(active_agent)
+    contracts = Contract.get_contracts()
 
-    print(f'Contracts for {active_agent.callsign}:')
+    print(f'Contracts for {active_agent["symbol"]}:')
     if not contracts:
         print('No contracts found.')
         return
@@ -166,7 +168,7 @@ def get_contracts(active_agent: Agent):
     for x in range(len(contracts)):
         print(f'#{x} {contracts[x]}')
 
-def ships(active_agent: Agent):
+def ships(active_agent: AgentShape):
     
     def navigate(shipSymbol: str, waypointSymbol: str):
         print(f'Navigating ship {shipSymbol} to waypoint {waypointSymbol}...')
@@ -179,13 +181,11 @@ def ships(active_agent: Agent):
     def scanWaypoints(shipSymbol: str):
         print(f'Scanning waypoints for ship {shipSymbol}...')
         try:
-            waypoints = Ship.scan_waypoints(shipSymbol)
+            waypoints: list[WaypointShape] = Ship.scan_waypoints(shipSymbol)
             print(f'Waypoints for ship {shipSymbol}:')
             count = 0
-            print(waypoints)
-            # for waypoint in waypoints:
-            #     print(f'{count}- {waypoint["symbol"]} ({waypoint["type"]})')
-            #     count += 1
+            for waypoint in waypoints:
+                print(f'Location: {waypoint["symbol"]} ({waypoint["type"]}) at ({waypoint["x"]}, {waypoint["y"]})')
         except Exception as e:
             print(f'Error scanning waypoints: {e}')
         
@@ -276,21 +276,26 @@ def ships(active_agent: Agent):
             print(f'Remaining: {cooldown["remaining_seconds"]} seconds')
         except ValueError as e:
             print(f'No Cooldown found for ship {shipSymbol}.')
-        
-        
+
+    def jettisonCargo(shipSymbol: str, cargoSymbol: str, units):
+        print(f'Jettisoning {units} units of {cargoSymbol} from ship {shipSymbol}...')
+        try:
+            cargo_jettisoned = Ship.jettison_cargo(shipSymbol, cargoSymbol, units)
+            print(f'Jettisoned {units} units of {cargoSymbol} from ship {shipSymbol}.')
+        except ValueError as e:
+            print(f'Error jettisoning cargo: {e}')
 
     print('Printing ships details...')
-    
-    current_ships = Agent.my_ships(active_agent)
+    current_ships: list[ShipShape] = Agent.my_ships()
 
     if not current_ships:
-        print(f'No ships found for agent {active_agent['symbol']}.')
+        print(f'No ships found for agent {active_agent["symbol"]}.')
         return
 
-    print(f'Ships for {active_agent['symbol']}:')
+    print(f'Ships for {active_agent["symbol"]}:')
     for x in range(len(current_ships)):
         ship = current_ships[x]
-        print(f'#{x} + Ship Name: {ship['symbol']}\tLocation: {ship['nav']['waypointSymbol']}\tStatus: {ship['nav']['status']}\tCargo: {ship['cargo']['units']}/{ship['cargo']['capacity']} units')
+        print(f'#{x} + Ship Name: {ship['symbol']}\tLocation: {ship['nav']['waypoint_symbol']}\tStatus: {ship['nav']['status']}\tCargo: {ship['cargo']['units']}/{ship['cargo']['capacity']} units')
     
     # choose ship to do something with
     print('Select a ship by entering its index (0-based):')
@@ -299,7 +304,7 @@ def ships(active_agent: Agent):
         ship_index = ship_chosen
         if ship_index < 0 or ship_index >= len(current_ships):
             raise IndexError
-        chosen_ship: Ship = current_ships[ship_index]
+        chosen_ship: ShipShape = current_ships[ship_index]
        
     except (IndexError, ValueError):
         print(f'Invalid ship index: {ship_chosen}. Please enter a valid index.')
@@ -341,6 +346,7 @@ def ships(active_agent: Agent):
         print('5. Sell Cargo')
         print('6. Deliver Cargo')
         print('7. View Cargo')
+        print('8. Jettison Cargo')
 
         action = input('Enter action number (1-9): ')
         match action:
@@ -351,21 +357,29 @@ def ships(active_agent: Agent):
             case '3':
                 orbitShip(shipSymbol)
             case '4':
+                viewCargo(shipSymbol)
+            case '5':
+                viewCargo(shipSymbol)
                 cargo_symbol = input('Enter cargo symbol to purchase: ')
                 units = input('Enter number of units to purchase: ')
                 purchaseCargo(shipSymbol, cargo_symbol, units)
-            case '5':
+            case '6':
+                viewCargo(shipSymbol)
                 cargo_symbol = input('Enter cargo symbol to sell: ')
                 units = input('Enter number of units to sell: ')
                 sellCargo(shipSymbol, cargo_symbol, units)
-            case '6':
-                deliverCargo(shipSymbol)
             case '7':
+                # TODO: is this while docked or in orbit?
+                deliverCargo(shipSymbol)
+            case '8':
                 viewCargo(shipSymbol)
+                cargo_symbol = input('Enter cargo symbol to jettison: ')
+                units = input('Enter number of units to jettison: ')
+                jettisonCargo(shipSymbol, cargo_symbol, units)
 
 
     nav_status = chosen_ship['nav']['status']
-    print(f'You selected ship: {chosen_ship["symbol"]} at {chosen_ship["nav"]["waypointSymbol"]}')
+    print(f'You selected ship: {chosen_ship["symbol"]} at {chosen_ship["nav"]["waypoint_symbol"]}')
     print("What would you like to do with this ship?")
     print('1. Get Status of Ship')
     print('2. Get Cooldown of Ship')
@@ -376,7 +390,7 @@ def ships(active_agent: Agent):
 
 def run(client: SpaceTradersAPI):
     quit = False
-    active_agent = Agent.get_agent('AGENT_MOJO')
+    active_agent: AgentShape = Agent.get_agent('AGENT_MOJO')
     print(f'Active agent: {active_agent['symbol']} ({active_agent['symbol']})')
     while not quit:
         args = list(filter(len, get_next_command()))
@@ -399,6 +413,4 @@ def run(client: SpaceTradersAPI):
                 accept_contract(active_agent)
             case 'ships' | 'ship' | 'my-ships' | 's':
                 ships(active_agent)
-            case 'contracts' | 'c':
-                get_contracts(active_agent)
 

@@ -10,6 +10,12 @@ from spacetraders.api.contract import Contract
 from spacetraders.api.endpoints import SpaceTradersAPIEndpoint
 from spacetraders.api.ship import Ship
 
+from spacetraders.api.response import ShipShape, ShipRegistrationShape, ShipNavShape, ShipCrewShape, ShipFrameShape, ShipReactorShape, ShipEngineShape, ShipModulesShape, ShipMountsShape, ShipCargoShape, ShipFuelShape, ShipCooldownShape, ShipCargoInventoryShape
+from spacetraders.api.response import ShipFuelConsumedShape, ShipRequirementsShape, ShipNavRouteShape, ShipNavRouteLocationShape, ShipRole
+from spacetraders.api.enums import ShipMountDeposits
+from datetime import datetime
+
+
 
 class Agent:
     def __init__(self, token: str, agent_info: AgentShape) -> None:
@@ -23,7 +29,7 @@ class Agent:
         self.faction: FactionSymbol = agent_info['starting_faction']
         self.headquarters: str = agent_info['headquarters']
         self.ship_count: int = agent_info['ship_count']
-        self.ships: list[Ship] = self.my_ships()
+        self.ships: list[ShipShape] = self.my_ships()
         self.contracts: list[Contract] = self.my_contracts()
 
 
@@ -47,12 +53,181 @@ class Agent:
         } 
 
 
-    def my_ships(self) -> list[Ship]:
+    # TODO: move this to ship.py 
+    @staticmethod
+    def my_ships() -> list[ShipShape]:
         res = SpaceTradersAPIRequest() \
             .endpoint(SpaceTradersAPIEndpoint.MY_SHIPS) \
             .call()
         
-        ships = res.spacetraders['data']
+        data = res.spacetraders['data']
+
+        ships: list[ShipShape] = []
+        for ship in data:
+            registration: ShipRegistrationShape = {
+                'name': ship['registration']['name'],
+                'faction_symbol': FactionSymbol[ship['registration']['factionSymbol']],
+                'role': ShipRole[ship['registration']['role']],
+            }
+            destination: ShipNavRouteLocationShape = {
+                'symbol': ship['nav']['route']['destination']['symbol'],
+                'type': ship['nav']['route']['destination']['type'],
+                'system_symbol': ship['nav']['route']['destination']['symbol'],
+                'x': ship['nav']['route']['destination']['x'],
+                'y': ship['nav']['route']['destination']['y']
+            }
+            origin: ShipNavRouteLocationShape = {
+                'symbol': ship['nav']['route']['origin']['symbol'],
+                'type': ship['nav']['route']['origin']['type'],
+                'system_symbol': ship['nav']['route']['origin']['symbol'],
+                'x': ship['nav']['route']['origin']['x'],
+                'y': ship['nav']['route']['origin']['y']
+            }
+            route: ShipNavRouteShape = {
+                'destination': destination,
+                'origin': origin,
+                'departureTime': datetime.fromisoformat(ship['nav']['route']['departureTime']),
+                'arrival': datetime.fromisoformat(ship['nav']['route']['arrival'])
+            }
+            nav: ShipNavShape = {
+                'system_symbol': ship['nav']['systemSymbol'],
+                'waypoint_symbol': ship['nav']['waypointSymbol'],
+                'route': route,
+                'status': ship['nav']['status'],
+                'flightMode': ship['nav']['flightMode'],
+            }
+            crew: ShipCrewShape = {
+                'current': ship['crew']['current'],
+                'required': ship['crew']['required'],
+                'capacity': ship['crew']['capacity'],
+                'rotation': ship['crew']['rotation'],
+                'morale': ship['crew']['morale'],
+                'wages': ship['crew']['wages']
+            }
+            frame: ShipFrameShape = {
+                'symbol': ship['frame']['symbol'],
+                'name': ship['frame']['name'],
+                'condition': ship['frame']['condition'],
+                'integrity': ship['frame']['integrity'],
+                'description': ship['frame']['description'],
+                'module_slots': ship['frame']['moduleSlots'],
+                'mounting_points': ship['frame']['mountingPoints'],
+                'fuel_capacity': ship['frame']['fuelCapacity'],
+                'requirements': ship['frame']['requirements'],
+                'quality': ship['frame']['quality']
+            }
+            reactor: ShipReactorShape = {
+                'symbol': ship['reactor']['symbol'],
+                'name': ship['reactor']['name'],
+                'condition': ship['reactor']['condition'],
+                'integrity': ship['reactor']['integrity'],
+                'description': ship['reactor']['description'],
+                'power_output': ship['reactor']['powerOutput'],
+                'requirements': ship['reactor']['requirements'],
+                'quality': ship['reactor']['quality']
+            }
+            engine: ShipEngineShape = {
+                'symbol': ship['engine']['symbol'],
+                'name': ship['engine']['name'],
+                'condition': ship['engine']['condition'],
+                'integrity': ship['engine']['integrity'],
+                'description': ship['engine']['description'],
+                'speed': ship['engine']['speed'],
+                'requirements': ship['engine']['requirements'],
+                'quality': ship['engine']['quality']
+            }
+            modules: list[ShipModulesShape] = []
+            if 'modules' in ship and ship['modules'] is not None:
+                x = ship['modules']
+                for module in x:
+                    moduleRequirements: ShipRequirementsShape = {
+                        'power': int(module['requirements']['power']),
+                        'crew': int(module['requirements']['crew']),
+                        'slots': int(module['requirements']['slots'])
+                    }
+                    modules.append(ShipModulesShape(
+                        symbol=module['symbol'],
+                        name=module['name'],
+                        description=module['description'],
+                        capacity=module['capacity'] if 'capacity' in module else 0,
+                        range=module['range'] if 'range' in module else 0,
+                        requirements=moduleRequirements
+                    ))
+            mounts: list[ShipMountsShape] = []
+            if 'mounts' in ship and ship['mounts'] is not None:
+                x = ship['mounts']
+                for mount in x:
+                    mountsRequirements: ShipRequirementsShape = {
+                        'power': int(mount['requirements']['power']),
+                        'crew': int(mount['requirements']['crew']),
+                        'slots': int(mount['requirements']['slots']) if 'slots' in mount['requirements'] else 0
+                    }
+                    mountDeposits: list[ShipMountDeposits] = []
+                    if 'deposits' in mount and mount['deposits'] is not None:
+                        for deposit in mount['deposits']:
+                            mountDeposits.append(deposit)
+                    mounts.append(ShipMountsShape(
+                        symbol=mount['symbol'],
+                        name=mount['name'],
+                        description=mount['description'],
+                        strength=mount['strength'] if 'strength' in mount else 0,
+                        deposits=mount['deposits'] if 'deposits' in mount else [],
+                        requirements=mountsRequirements
+                    ))
+            inventory: list[ShipCargoInventoryShape] = []
+            if 'inventory' in ship and ship['inventory'] is not None:
+                inv = data['inventory']
+                for item in inv:
+                    inventory.append(ShipCargoInventoryShape(
+                        symbol=item['symbol'],
+                        name=item['name'],
+                        description=item['description'],
+                        units=item['units']
+                    ))
+            cargo: ShipCargoShape = {
+                'capacity': ship['cargo']['capacity'],
+                'units': ship['cargo']['units'],
+                'inventory': inventory
+            }
+            consumed: ShipFuelConsumedShape = {
+                'amount': ship['fuel']['consumed']['amount'],
+                'timestamp': datetime.fromisoformat(ship['fuel']['consumed']['timestamp'])
+            }
+            fuel: ShipFuelShape = {
+                'current': ship['fuel']['current'],
+                'capacity': ship['fuel']['capacity'],
+                'consumed': consumed
+            }
+            if 'expiration'  in ship['cooldown']:
+                cooldown: ShipCooldownShape = {
+                    'ship_symbol': ship['cooldown']['shipSymbol'],
+                    'total_seconds': ship['cooldown']['totalSeconds'],
+                    'remaining_seconds': ship['cooldown']['remainingSeconds'],
+                    'expiration': datetime.fromisoformat(ship['cooldown']['expiration']) if 'expiration' not in ship['cooldown'] else datetime.fromtimestamp(0)
+                }
+            else:
+                cooldown: ShipCooldownShape = {
+                    'ship_symbol': ship['cooldown']['shipSymbol'],
+                    'total_seconds': ship['cooldown']['totalSeconds'],
+                    'remaining_seconds': ship['cooldown']['remainingSeconds'],
+                    'expiration': datetime.fromtimestamp(0)
+                }
+            current_ship: ShipShape = {
+                'symbol': ship['symbol'],
+                'registration': registration,
+                'nav': nav,
+                'crew': crew,
+                'frame': frame,
+                'reactor': reactor,
+                'engine': engine,
+                'modules': modules,
+                'mounts': mounts,
+                'cargo': cargo,
+                'fuel': fuel,
+                'cooldown': cooldown
+            }
+
+            ships.append(current_ship)
 
         return ships if ships is not None else []
     
@@ -92,7 +267,7 @@ class Agent:
         )
 
     @staticmethod
-    def get_agent(callsign: str) -> AgentShape | SpaceTradersAPIError:
+    def get_agent(callsign: str) -> AgentShape:
         res = SpaceTradersAPIRequest() \
             .endpoint(SpaceTradersAPIEndpoint.GET_AGENT) \
             .params(list([callsign])) \
@@ -135,7 +310,7 @@ class Agent:
                 req = paged_req(pages)
             case range():
                 for page in pages:
-                    req = paged_req(pages)
+                    req = paged_req(page)
 
         return []
 

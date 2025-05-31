@@ -54,13 +54,13 @@ class Contract:
         
         self.accepted: bool = accepted
         self.fulfilled: bool = fulfilled
-        # TODO: convert these to datetime objects
-        self.expiration: str = expiration
-        self.deadlineToAccept: str = deadlineToAccept
+        # Ensure these are datetime objects
+        self.expiration: datetime = expiration if isinstance(expiration, datetime) else datetime.fromisoformat(expiration)
+        self.deadlineToAccept: datetime = deadlineToAccept if isinstance(deadlineToAccept, datetime) else datetime.fromisoformat(deadlineToAccept)
 
 
     @classmethod 
-    def get_contracts(cls, active_agent: str):
+    def get_contracts(cls):
         res = SpaceTradersAPIRequest() \
             .endpoint(SpaceTradersAPIEndpoint.MY_CONTRACTS) \
             .call()
